@@ -1,0 +1,59 @@
+---
+title: "DATA 607 Assignment 1"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r, echo= FALSE}
+library(repmis)
+library(pander)
+library(stringr)
+mushrooms <- source_data ('https://archive.ics.uci.edu/ml/machine-learning-databases/mushroom/agaricus-lepiota.data')
+pander(head(mushrooms), type = "grid", caption = "Sample of Original Dataset")
+sub <- mushrooms[,c(1,4,6,18,23)]
+colnames(sub) <- c("Poisonous", "cap_color", "Odor", "Veil_color", "Habitat")
+
+haves <-c('e', 'p')
+wants <-c('edible', 'poisonous')
+
+for (i in 1:length(haves)){
+  sub[,"Poisonous"][sub[,"Poisonous"] == haves[i]] <- wants[i]
+}
+
+haves <- c('n', 'b', 'c', 'g', 'r', 'p', 'u', 'e', 'w', 'y')
+string = "brown=n,buff=b,cinnamon=c,gray=g,green=r, pink=p,purple=u,red=e,white=w,yellow=y"
+wants <-str_extract_all(string, pattern = "[[:alpha:]]{2,16}")
+wants <-wants[[1]]
+for (i in 1:length(haves)){
+  sub[,"cap_color"][sub[,"cap_color"] == haves[i]] <- wants[i]
+}
+
+haves <- c('a', 'l', 'c', 'y', 'f', 'm', 'n', 'p', 's')
+string = "almond=a,anise=l,creosote=c,fishy=y,foul=f, musty=m,none=n,pungent=p,spicy=s"
+wants <-str_extract_all(string, pattern = "[[:alpha:]]{2,16}")
+wants <-wants[[1]]
+for (i in 1:length(haves)){
+  sub[,"Odor"][sub[,"Odor"] == haves[i]] <- wants[i]
+}
+
+haves <- c('n', 'o', 'w', 'y')
+string = "brown=n,orange=o,white=w,yellow=y"
+wants <-str_extract_all(string, pattern = "[[:alpha:]]{2,16}")
+wants <-wants[[1]]
+for (i in 1:length(haves)){
+  sub[,"Veil_color"][sub[,"Veil_color"] == haves[i]] <- wants[i]
+}
+
+haves <- c('g', 'l', 'm', 'p', 'u', 'w', 'd')
+string = "habitat: grasses=g,leaves=l,meadows=m,paths=p, urban=u,waste=w,woods=d"
+wants <-str_extract_all(string, pattern = "[[:alpha:]]{2,16}")
+wants <-wants[[1]]
+for (i in 1:length(haves)){
+  sub[,"Habitat"][sub[,"Habitat"] == haves[i]] <- wants[i]
+}
+
+pander(head(sub,100), type = "grid", caption = "Sample of Transformed Dataset")
+```
