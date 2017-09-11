@@ -1,0 +1,57 @@
+---
+title: "Assignment 2"
+output:
+  html_document:
+    toc: yes
+  toc: default
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+###Connect to the movie database and load into a dataframe
+####Required packages:
+*RMySQL*
+*ggplot2*
+*stringr*
+*pander*
+```{r}
+library(RMySQL)
+library(ggplot2)
+library(stringr)
+library(pander)
+con <- dbConnect(MySQL(),user = 'movie_guest', password = 'datascience',  dbname = 'movies', host = 'localhost') ###This uses the guest user created by the SQL script with read only access
+query <- ' select
+              user_name,
+              movie_name,
+              rating
+        from user_rating ra
+          left join users u
+            on ra.user_id = u.id
+          left join movie_names m
+            on ra.movie_id = m.id
+        order by 1,2'
+movie_df <- dbGetQuery(con, query)
+```
+
+###Rename the columns and inspect the dataframe
+```{r}
+colnames(movie_df) <- c("Name", "Title", "Rating")
+class(movie_df) ###we see the object is the correct type
+pander(head(movie_df))
+```
+```{r}
+###Titles need to be shortened to show properly in the plot
+shorten <- function (data){
+  str_replace(data, 'The', '')
+}
+movie_df$title_short <- sapply(movie_df$Title, shorten)
+```
+###Produce ratings plot
+```{r fig.width=8}
+avg_ratings <- aggregate(Rating ~ title_short, movie_df, mean)
+ggplot(avg_ratings) + geom_bar(aes(x = title_short, y = Rating, fill = title_short), stat = 'identity') + 
+  labs(title = "Average Ratings", x = "Title", y = "Rating", fill = "Title")
+```
+
