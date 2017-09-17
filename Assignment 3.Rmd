@@ -1,0 +1,77 @@
+---
+title: "Assignment 3"
+output:
+  html_document:
+    toc: yes
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+###Problem 3
+
+**1.** make all items *first* *last*
+```{r}
+library(stringr)
+raw.data <- "555-1239Moe Szyslak(636) 555-0113Burns, C. Montgomery555-6542Rev. Timothy Lovejoy555 8904Ned Flanders636-555-3226Simpson, Homer5543642Dr. Julius Hibbert"  
+
+name <- unlist(str_extract_all(raw.data, "[[:alpha:]., ]{2,}")) #load in vector of names
+name
+library(stringr)
+name_it <-function (input){
+  if (str_detect(input,',')){ #not all names have a comma, so we need a conditional
+    chopped <- unlist(str_split(input,',')) #split string on comma
+    pasted <- str_trim(paste(chopped[2], chopped[1])) #reverse the order then paste back together
+    return(pasted)
+    
+  }else{
+    return(input)
+  }
+}
+good_names <- as.character(sapply(name,name_it))
+good_names
+
+```
+**2.** Return logical vector indicating title
+```{r}
+grepl("[[:alpha:]]{2,}\\.",name)
+```
+**3.** Does the character have a middle name?
+```{r}
+grepl("[[:alpha:]^.]+,.+\\>.+\\>",name)
+```
+###Problem 4
+Describe the regular expression and provide an example
+**1.** Some strange way of expressing dollars (or something to do with jquery or some other web technology)
+```{r}
+test <- "I have 773432$ in my pocket."
+str_extract(test,"[0-9]+\\$")
+```
+**2.** A four letter word
+```{r}
+test1 <- "A test"
+str_extract(test1, "\\b[a-z]{1,4}\\b")
+```
+**3.** The name of a text file
+```{r}
+test2 <- "mydata.txt"
+str_extract(test2, ".*?\\.txt$")
+```
+**4.** A date represented with slashes
+```{r}
+test3 <- "today is 12/12/2012"
+str_extract(test3,"\\d{2}/\\d{2}/\\d{4}")
+```
+**5.** An html element
+```{r}
+test4 <- "<h1>this is my header</h1>"
+str_extract(test4, "<(.+?)>.+?</\\1>")
+```
+###Problem 9
+```{r}
+long_string <- "clcopCow1zmstc0d87wnkig7OvdicpNuggvhryn92Gjuwczi8hqrfpRxs5Aj5dwpn0TanwoUwisdij7Lj8kpf03AT5Idr3coc0bt7yczjatOaootj55t3Nj3ne6c4Sfek.r1w1YwwojigOd6vrfUrbz2.2bkAnbhzgv4R9i05zEcrop.wAgnb.SqoU65fPa1otfb7wEm24k6t3sR9zqe5fy89n6Nd5t9kc4fE905gmc4Rgxo5nhDk!"
+message <- unlist(str_extract_all(long_string, "[[:Upper:][:punct:]]+"))#find all upper case letters and punctionation
+paste(unlist(strsplit (paste(message, sep = '', collapse = ''),"\\.")),collapse = ' ')
+#Paste it together then split it on "."
+```
