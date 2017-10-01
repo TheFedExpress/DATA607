@@ -1,0 +1,99 @@
+---
+title: "Data 607 Assignment 5"
+author: "Peter Goodridge"
+date: "October 1, 2017"
+output: 
+  html_document:
+    toc: yes
+    toc_float: yes
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+
+###Ojbectives
+
+*Transform and tidy the airline data*
+
+*Perform an analysis of flight delays*
+
+###Initialization
+```{r}
+library(RMySQL)
+library(tidyverse)
+library(ggplot2)
+library(pander)
+library(stringr)
+library(htmlTable)
+```
+
+
+###Create untidy dataset
+```{r}
+query <- 'select * from flights'
+con <- dbConnect(MySQL(), user = 'guest_user', password = 'datascience', dbname = 'airports', host = 'localhost')
+untidy <- dbGetQuery(con, query)
+```
+
+
+###Begin Cleaning
+
+```{r}
+pander(head(untidy))
+
+
+rows <- nrow(untidy)
+untidy$status <-  untidy$status %>% lapply(function (x) str_replace_all(x,' ', '_'))
+#We want the statuses to make better column names, so they can be referenced with the "$" operator or used in a relational DB
+
+for (i in seq (2,rows,2)){
+  untidy[i,1] <- untidy[i-1,1]
+}
+#The airline only appears as a header.  All the null columns beneath are assumed to be the same airline.  This is common when data is displayed, but not good for storing data.
+```
+
+###Transpose data
+
+We want the dataframe to conform to the tidy format, so the airport and count become variables, while locations become rows.
+We also split the status column into separate variables, as the count of on time and delayed represent different quantities.
+Finally, we want to create variables for total flights and ratio delayed for further analysis
+
+```{r}
+tidier <- untidy %>% gather( 'Location', 'count', 3:7) %>% spread('status', 'count')
+tidier$Location <-  tidier$Location %>% lapply( function (x) str_to_title(str_replace_all(x,'_', ' '))) %>% unlist()
+#this no longer needs to be one word and can be propcased
+tidy <- tidier %>% mutate(total_flights = delayed + on_time) %>% mutate (ratio_delayed = delayed/total_flights)
+
+pander(tidy)
+```
+
+###Exploratory analysis
+
+```{r}
+by_airline <- tidy %>% group_by(airline) %>% 
+  summarize(total_delayed = sum(delayed), total_flights = sum(total_flights), ratio = sum(delayed)/sum(total_flights))
+#Compare the overal ratios
+
+pander(data.frame(by_airline))
+#pander did not work with the tibble and in my opinion looks better than htmlTable
+
+ggplot(tidy) + geom_bar(mapping = aes(x = Location, y = ratio_delayed, fill = airline), stat = "identity") +
+   labs( title = "Delay Ratio by Location", y = "Proportion Delayed")
+#compare the ratios by airport
+
+ggplot(tidy) + geom_bar(mapping = aes(x = Location, y = ratio_delayed, fill = airline), stat = "identity", 
+      position ="fill") + labs( title = "Relative Delay Ratios", y = "Proportion Delayed")
+#the same chart as above, but with the ratio_delayed normalized.  Can be used to see if there is a difference in delay
+```
+
+###Statistical tests
+
+We want to prove there is a statistically signficant difference in delay activity between airlines
+```{r}
+t.test(tidy[tidy$airline == 'AM West', "ratio_delayed"], tidy[tidy$airline == 'Alaska', "ratio_delayed"], paired = TRUE)
+by_airline %>% select(2:3) %>% chisq.test()
+```
+
+Both indicate a differance at a .05 level of significance.  The chi squared test is has much more statistical power because it differentiates between many observations and few observations.  For instance, the T test does not differentiate between 1 delay in 4 flights and 2500 delays in 10,000 flights.  This can be seen through the much high p value with this data.
