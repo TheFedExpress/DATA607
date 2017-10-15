@@ -1,0 +1,102 @@
+---
+title: "Assignment 7"
+author: "Peter Goodridge"
+date: "October 15, 2017"
+output: 
+  html_document:
+    toc: yes
+    toc_float: yes
+    df_print: paged
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, warning = F)
+```
+
+###Initialization
+
+
+```{r}
+library(jsonlite)
+library(xml2)
+library(rvest)
+library(XML)
+library(RCurl)
+library(tidyverse)
+
+```
+
+###Read in JSON
+
+This is by far the easiest, but I made the authors value a list on the JSON.  This added a layer of nesting on the dataframe, causing it to print poorly.
+
+```{r}
+json_books <- fromJSON(txt ="https://raw.githubusercontent.com/TheFedExpress/Data/master/Books.json")
+json_books
+
+```
+
+###Read in XML
+
+The Tidy packages will work with the raw github URL, but the other packages need to have the data pulled down with RCurl.
+If I used two author tags on the XML file (for the book with two authors), the data frame function errored.  I had to create unique names for the tags.  
+If data is encountered like that in the wild, you must use a similar method to the last HTML readin below where data is extracted piece by piece.
+
+```{r}
+data <- getURL("https://raw.githubusercontent.com/TheFedExpress/Data/master/books.xml")
+xbooks <- xmlParse(data)
+root <- xmlRoot(xbooks)
+books_xml <- xmlToDataFrame(root)
+books_xml
+```
+
+###Read in HTML
+
+It wasn't mentioned in the text, but there is a Tidyverse package for converting HTML tables to dataframes.
+I chose to put the two authors on one line because that is how it would most likely appear in the wild.
+
+```{r}
+books_html <- "https://raw.githubusercontent.com/TheFedExpress/Data/master/books.html" %>%
+  read_html () %>%
+  html_nodes("table") %>%
+  html_table(fill = T)
+books_html <- as.data.frame(books_html)
+books_html
+books_html %>% separate(Author, c('Author1', 'Author2'), sep = "and")
+
+```
+
+Alternatively this can be done with XPath if a little more control is needed.
+Here the table is isolated with Xpath and the xmlValue function is used to extract the values in the table.
+
+```{r}
+
+data <- getURL("https://raw.githubusercontent.com/TheFedExpress/Data/master/books.html")
+
+file <- htmlParse(data)
+
+table <- xpathSApply(file, "//table/tr")
+
+extract <- function(row){
+  values <- xmlValue(row[[1]])
+  size <- xmlSize(row)
+  for (i in (2:size)){
+    values <- c(values, xmlValue(row[[i]]))
+  }
+  return(values)
+}
+#Couldn't figure out how to vectorize this function.  Sapply combined all the values into one string.
+
+values <- sapply(table, extract)
+values_t <- t(values)
+values[2:4,]
+books_html2 <- as.data.frame(values_t[2:4,1:5], stringsAsFactors = FALSE)
+colnames(books_html2) <- values_t[1,1:5]
+books_html2
+books_html2 %>% separate(Author, c('Author1', 'Author2'), sep = "and")
+
+```
+
+###Conclusion
+
+R does offer some convenient solutions for converting web data formats to dataframes.  However, they all have their limitations when a dataframe is needed because that object simply isn't as complex as what is being read.  This is why the 3 dataframes all look different.  Work arounds must be used, and the best method should be evaluated on a case by case basis.
