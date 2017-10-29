@@ -1,0 +1,112 @@
+---
+title: "Assignment 9"
+author: "Peter Goodridge"
+date: "October 29, 2017"
+output: 
+  html_document:
+    toc: yes
+    toc_float: yes
+    df_print: paged
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, warning = F, message = F)
+library(tidyverse)
+```
+
+###Movie Review function
+
+This function provides a convenient way of accessing NY times movie reviews.  I can allow a user to search for individual movies or critic's picks, while specifying the date range, the page of results to show, and the ordering of the results.
+
+```{r}
+library(stringr)
+movie_query <- function (type = "query", movie = "", date1 = floor_date(today(), "year"), date2 = today (), start = 0,
+                        order = "by-title") 
+  {
+  library(RCurl)
+  library(rvest)
+  library(jsonlite)
+  library(lubridate)
+  start <- (start %/% 20)*20
+  start <- as.character(start)
+  
+  base_url <- sprintf("http://api.nytimes.com/svc/movies/v2/reviews/search.json?api-key=%s", Sys.getenv("times_key"))
+  #set key as environment variable to prevent viewers from using my key
+  
+  if (type == "query")
+    {
+    movie <- URLencode(movie)
+    url <- sprintf("%s&query=%s&opening-date=%s;%s&order=%s&offset=%s",base_url, movie, date1, date2, order, start)
+    json <- stream_in(url(url))
+    if (json$num_results >= 1) #check if any results were returned.
+    { 
+      print(sprintf ("More records: %s", json$has_more))
+      has_more <- json$has_more
+      movie_df <- json$results[[1]] %>%
+        flatten() #some nested objects appear near end of DF under the keys of "link" and "multimedia"
+      return(movie_df)
+    }else
+    {
+      print ("Warning: no results")
+    }
+  }else if (type == "picks")
+  {
+    url <- sprintf("%s&query=&critics-pick=Y&order=%s&opening-date=%s;%s&offset=%s", base_url, order,  date1, date2, start)
+    json <- stream_in(url(url))
+    if (json$num_results >= 1)
+    { 
+      print(sprintf ("More records: %s", json$has_more))
+      has_more <- json$has_more
+      movie_df <- json$results[[1]] %>%
+        flatten
+      return(list(df = movie_df, more = has_more)) #add logical for looping through pages if necesary
+    }else
+    {
+      print ("Warning: no results")
+    }
+  }
+}
+```
+
+###Examples
+
+
+**The user can search for critic's picks:**
+```{r}
+head(movie_query(type = "picks", order = "by-opening-date", date1 = "2016-01-01", date2 = "2016-06-30")$df)
+```
+
+
+**Or individual movies:**
+```{r}
+movie_query(movie = 'guardians of the galaxy', date1 = "2014-01-01", date2 = "2014-12-31")
+movie_query(movie = 'the godfather', date1 = "1920-01-01")
+```
+
+The logical vector returned with the critic's picks option is important.  The JSON file lacks a number of hits or number of pages, so the logical can be used to return all movies from a query.
+
+```{r, results = "hide"}
+has_more <- TRUE
+start = 0
+while (has_more == TRUE)
+{
+  result <- invisible(movie_query(type = "picks", date1 = "2016-10-01", start = start))
+  if (start == 0)
+  { 
+  movies <-  result$df
+  has_more <- result$more
+  start <- start + 20
+  Sys.sleep(1)
+  }else
+  {
+    movies <-  union_all(movies, result$df)
+    has_more <- result$more
+    start <- start + 20
+    Sys.sleep(1)
+  }
+}
+```
+
+###Conclusion
+
+The "movie_query" function can be added to a user interface, such as a web app, to display movie reviews from the times. Text boxes can be used for input the arguments to the function, and the important parts of the dataframe can be returned, depending on the context.  The function could be wrapped in a while loop similar to the one above to guarentee all results are returned for the user's query. 
