@@ -1,0 +1,40 @@
+---
+title: "Recommender Systems"
+author: "Peter Goodridge"
+date: "November 8, 2017"
+output:
+  html_document:
+    toc: yes
+---
+
+##LinkedIn's You May Know
+
+###Scenario Design
+
+**1) Who are your target users?**
+
+Professionals of all types
+
+**2) What are their goals**
+
+-To connect with other professionals who have similar interests
+-To share stories and articles related to their profession
+-To participate in discussions related to their profession
+-To find new job opportunities
+-To grow their professional network
+
+**3)How can you help them accomplish these goals**
+
+If all users are connected with the people they might be intersted in connecting with, this facilitates the user's ability to accomplish their goals.  It will give them the most possible resources for sharing interests and finding jobs.  It directly solves their last goal of growing their network.  Possible connections can be suggested to the user based on data we have on them.
+
+###How does it work?
+
+Facebook seems to rely mostly on social graphs, depictions of relations between users, to make its recommendations.  LinkdIn appears to work a bit differently, though still relying on graphs.  First, you generally volunteer more information on LinkedIn because you employers to be able to find you.  They know how long you worked or went to school with another user, your industry, your region, and your interests.  You might notice that you have no mutual connections with some of the top recomendations, which would never happen on Facebook.  All the features are given weights and the reccomendation list is sorted according to those weights.  The existing connections of LinkedIn's users were likely used to determine these weights.
+
+###How can it be improved?
+
+-There are some people who have similar roles as me in the California office who are far down on the list.  I think they should plot titles on a "role space" and use that as one of the main features
+
+-Common connections should be upweighted because there are very few people with whom I both work and share connections, yet don't know well.  Many of them don't appear near the top of the list.
+
+-Similar to the first bullet, people in a similar field who you went to high school or college with should make the list.  They are people who I might refer for a job or want a referal from.
