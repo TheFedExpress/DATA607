@@ -1,0 +1,56 @@
+---
+title: "Assignment 12"
+author: "Peter Goodridge"
+date: "November 19, 2017"
+output: 
+  html_document:
+    toc : yes
+    toc_float: yes
+    df_print: paged
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, warning = F, message = F)
+```
+
+###Objective
+
+Migrate the "flights" database from a relational DB to a NOSQL db.  For this excercise, MongoDB was chosen.
+
+
+###The Script
+
+The loadflights script was be ran from MYSQL to create the schema.  Using the guest user created from that script, we connect and create a list of dataframes using simple select * queries.  The Dataframes are then loaded onto Mongo Atlas via the mongolite package.  Each database table is a separate collection in the "flights" NOSQL database.
+
+```{r}
+library(mongolite)
+library(RMySQL)
+library(stringr)
+library(tidyverse)
+sql_con <- dbConnect(MySQL(),user = 'guest_user', password = 'datascience',  dbname = 'flights', host = 'localhost')
+tables <- dbListTables(sql_con)
+queries <- str_c("select * from ", tables, ";")
+dfs <- sapply(queries, function(x) dbGetQuery(sql_con, x))
+url <- "mongodb://pgdridge:datascience@cluster0-shard-00-00-xa7nx.mongodb.net:27017,cluster0-shard-00-01-xa7nx.mongodb.net:27017,cluster0-shard-00-02-xa7nx.mongodb.net:27017/test?ssl=true&replicaSet=Cluster0-shard-0&authSource=admin"
+
+#Commented out because the data was already loaded in testing.
+
+#for (i in 1:length(tables)){ 
+#  mongo<- mongolite::mongo(collection = tables[i], db = "flights", url = url)
+#  mongo$insert(dfs[[i]])
+#} 
+
+airports <- mongolite::mongo(collection = "airports", db = "flights", url = url)
+flights <- mongolite::mongo(collection = "flights", db = "flights", url = url)
+airports$count()
+flights$count()
+
+head(flights$find('{"year" : 2013, "month" : 6, "day" : 12}')) %>%
+  select(dep_delay, arr_delay, tailnum, origin, dest, carrier)
+```
+
+###Conclusion
+
+Stored as is, joins can not be performed.  This is a major disadvantage.  The MongoDB documentation says that manual references must be created on ID fields, and all documents stored in one collection.  There was unfortunately no documentation in mongolite for creating manual references.  
+
+I would say that the advantage over a realtional DB would be performance.  The data can easily be deployed on a cluster through Atlas.  The other typical advantage is the ability to store more complex data structures.  This DB consists of simple tables, so that is not an advantage here.
