@@ -1,0 +1,315 @@
+---
+title: "Stock Prices and Twitter"
+author: "Peter Goodridge"
+date: "December 10, 2017"
+output:
+  slidy_presentation:
+    code_folding: hide
+    df_print: paged
+    fig_height: 6
+    fig_width: 8
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = F, warning = F, message = F)
+```
+
+```{r}
+library(jsonlite)
+library(RCurl)
+library(twitteR)
+library(tidytext)
+library(tidyverse)
+library(stringr)
+library(lubridate)
+library(rvest)
+library(RCurl)
+library(mongolite)
+library(stringi)
+library(tm)
+library(RTextTools)
+library(pander)
+
+url <- "mongodb://pgdridge:datascience@cluster0-shard-00-00-xa7nx.mongodb.net:27017,cluster0-shard-00-01-xa7nx.mongodb.net:27017,cluster0-shard-00-02-xa7nx.mongodb.net:27017/test?ssl=true&replicaSet=Cluster0-shard-0&authSource=admin"
+mongo_tweets<- mongolite::mongo(collection = "tweets", db = "stockTweets", url = url)
+mongo_quotes <- mongolite::mongo(collection = "quotes", db = "stockTweets", url = url)
+
+all_tweets <- mongo_tweets$find()
+all_quotes <- mongo_quotes$find()
+sentiment_dataset <- read_csv("https://raw.githubusercontent.com/TheFedExpress/Data/master/sentiment%20subset")
+
+tickers <- c("tsla", "msft", "pfe", "ge", "nflx", "ctxs", "sbux")
+queries <- c('#tesla', '#microsoft', 'pfizer', 'general electric', '#netflix', 'citrix', '#starbucks')
+replace_it <- function(ticker){
+  for (i in 1:length(queries)){
+    if (ticker == tickers[i]){
+      return(queries[i])
+    }
+  }
+}
+all_quotes$company <- sapply(all_quotes$company, replace_it)
+all_quotes$time <- ymd_hms(all_quotes$time)
+all_quotes$open <- as.numeric(all_quotes$open)
+all_quotes$close <- as.numeric(all_quotes$close)
+
+no_sentiment <- c('shares')
+
+sentiment <- c('downgrade', 'upgrade', 'fall', 'rise', 'bullish', 'bearish', 'bull', 'bear', 'ssmiley', 'ssadface')
+scores <- c(-4, 4, -2, 2, 4, -4, 4, -4, 3, -3)
+new_sentiment <- data.frame(word = sentiment, score = scores, stringsAsFactors = F)
+sentiment_words <- get_sentiments("afinn") %>%
+  filter(!(word %in% no_sentiment))%>%
+  dplyr::union(new_sentiment)
+
+clean_tweet <- all_tweets %>%
+  filter(isRetweet == "FALSE") %>%
+  mutate(
+    clean_text = str_replace_all(text, 'http(s)?://[\\S]+', 'URL'),
+    clean_text = str_replace_all(clean_text, '@[\\S]+', 'USER'),
+    clean_text = tolower(clean_text),
+    clean_text = str_replace_all(clean_text, ':-\\)', 'ssmiley'),
+    clean_text = str_replace_all(clean_text, ':-/', 'ssadface'),
+    clean_text = str_replace_all(clean_text, ':-\\(', 'ssadface'),
+    clean_text = str_replace_all(clean_text, '\\(:', 'ssmiley'),
+    clean_text = str_replace_all(clean_text, ':\\(', 'ssadface'),
+    clean_text = str_replace_all(clean_text, ':\\)', 'ssmiley'),
+    clean_text = str_replace_all(clean_text, '\\):', 'ssadface'),
+    clean_text = str_replace_all(clean_text, ':-D', ' ssmiley '),
+    clean_text = str_replace_all(clean_text, ':\\[', ' ssadface '),
+    clean_text = str_replace_all(clean_text, '=\\)', ' ssmiley '),
+    clean_text = str_replace_all(clean_text, '=\\(', ' ssadface '),
+    clean_text = str_replace_all(clean_text, '[[:punct:]]', ''),
+    clean_text = str_replace_all(clean_text, '[^[:alpha:] .]', '')
+  )
+
+
+bigrams <- clean_tweet %>%
+  unnest_tokens(bigram, text, token = "ngrams", n = 2)
+
+
+negation_words <- c("not", "no", "never", "without", "didnt")
+
+tweets_sentiment_temp <- bigrams %>%
+  separate(bigram, sep = ' ', c("word1", "word2")) %>%
+  inner_join(sentiment_words, by = c("word2" = "word") ) %>%
+  mutate(bigram = str_c(word1, word2, sep = ' '))
+
+tweets_sentiment_temp$score <- ifelse(tweets_sentiment_temp$word1 %in% negation_words, tweets_sentiment_temp$score*-1, tweets_sentiment_temp$score)
+
+tweets_sentiment <- tweets_sentiment_temp %>%
+  mutate(
+    date = floor_date(created, "30 mins")
+  ) %>%
+  group_by(company, date) %>%
+  summarise(sentiment = sum(ifelse(isRetweet == "False", score, score * .5))) %>%
+  ungroup()
+
+top_words <- tweets_sentiment_temp %>%
+  group_by(word2) %>%
+  summarise(total_score = sum(score)) %>%
+  filter(min_rank(desc(total_score)) <= 15)
+top_words$type = "Positive Sentiment"
+  
+
+bottom_words <- tweets_sentiment_temp %>%
+  group_by(word2) %>%
+  summarise(total_score = sum(score)) %>%
+  filter(min_rank(total_score) <= 15)
+bottom_words$type = "Negative Sentiment"
+  
+
+sentiment_clean <- sentiment_dataset %>%
+  mutate(
+    clean_text = str_replace_all(SentimentText, 'http(s)?://[\\S]+', 'URL'),
+    clean_text = str_replace_all(clean_text, '@[\\S]+', 'USER'),
+    clean_text = tolower(clean_text),
+    clean_text = str_replace_all(clean_text, ':-\\)', ' ssmiley '),
+    clean_text = str_replace_all(clean_text, ':-\\(', 'ssadface '),
+    clean_text = str_replace_all(clean_text, '\\(:', ' sssmiley '),
+    clean_text = str_replace_all(clean_text, ':\\(', ' ssadface '),
+    clean_text = str_replace_all(clean_text, ':\\)', ' sssmiley '),
+    clean_text = str_replace_all(clean_text, '\\):', ' ssadface '),
+    clean_text = str_replace_all(clean_text, '\\):', ' ssadface '),
+    clean_text = str_replace_all(clean_text, ':-D', ' ssmiley '),
+    clean_text = str_replace_all(clean_text, ':\\[', ' ssadface '),
+    clean_text = str_replace_all(clean_text, '=\\)', ' ssmiley '),
+    clean_text = str_replace_all(clean_text, '=\\(', ' ssadface '),
+    clean_text = str_replace_all(clean_text, '[[:punct:]]', ''),
+    clean_text = str_replace_all(clean_text, '[^[:alpha:] .]', '')
+  )
+
+bigrams_test <- sentiment_clean %>%
+  unnest_tokens(bigram, SentimentText, token = "ngrams", n = 2)
+
+
+sentiment_test_temp <- bigrams_test %>%
+  separate(bigram, sep = ' ', c("word1", "word2")) %>%
+  left_join(sentiment_words, by = c("word2" = "word") ) %>%
+  mutate(
+    bigram = str_c(word1, word2, sep = ' '),
+    score = ifelse(is.na(score), 0, score)
+    )
+    
+
+sentiment_test_temp$score <- ifelse(sentiment_test_temp$word1 %in% negation_words, sentiment_test_temp$score*-1, sentiment_test_temp$score)
+
+sentiment_test <- sentiment_test_temp %>%
+  group_by(ItemID, Sentiment) %>%
+  summarise(total_score = sum(score)) %>%
+  ungroup() %>%
+  mutate(predicted = ifelse(total_score <= 1, 0, 1),
+         correct = ifelse(predicted == Sentiment, 1,0))
+
+hourly_sentiment <- tweets_sentiment %>%
+  inner_join(all_quotes, by = c("company" = "company", "date" = "time")) %>%
+  mutate (company = str_extract(company, "[[:alpha:] ]+")) %>%
+  group_by(company) %>%
+  mutate(
+    change =(close - lag(close))/lag(close),
+    change = ifelse(is.na(change), 0, change),
+    change_std = (change - mean(change))/sd(change),
+    sentiment_std = (sentiment - mean(sentiment))/sd(sentiment)
+  ) %>%
+  ungroup ()
+
+daily_sentiment <- clean_tweet %>%
+  unnest_tokens(word, text) %>%
+  inner_join(sentiment_words, by = "word") %>%
+  mutate(
+    date = floor_date(created, "day"),
+    date = as.character(date),
+    date = ymd(date)
+  ) %>%
+  group_by(company, date) %>%
+  summarise(sentiment = sum(score)) %>%
+  ungroup() %>%
+  group_by(company) %>%
+  mutate(sentiment_std = (sentiment - mean(sentiment))/sd(sentiment)) %>%
+  ungroup ()
+
+daily_quotes <- all_quotes %>%
+  filter(hour(time) == 16) %>%
+  arrange(company, time) %>%
+  group_by(company) %>%
+  mutate(
+         change = (close - lag(close)), 
+         change = change/lag(close),
+         change = ifelse(is.na(change), 0, change),
+         change_std = (change - mean(change))/sd(change),
+         date = floor_date(time, "day") + 86400,
+         date = as.character(date),
+         date = ymd(date)
+      ) %>%
+  ungroup () %>%
+  select(company,date, change_std)
+
+daily_comp <- daily_sentiment %>%
+  inner_join(daily_quotes, by = c("company" = "company", "date" = "date")) %>%
+  mutate (company = str_extract(company, "[[:alpha:] ]+")) %>%
+  ungroup ()
+
+
+```
+
+##Efficient Market Hypothesis
+
+- Asserts that beating the market is impossible
+- Stock prices represent all available information
+- 3 Variants,  "weak", "semi-strong", and "strong"
+- Strong form contends that prices reflect even inside information (information that is illegal to use in trading)
+
+<div align = "right"> ![](C:\Users\pgood\Desktop\Company Logos\emh.png) </div>
+
+##Why Bother?
+
+- There is much controversy over the truth of EMH
+- At its core, EMH is about information
+- Gaining an informational advantage could allow you to "beat" the market
+- Twitter is a vast source of largely untapped data about people's opinions of companies
+- Mining the Twitterverse for these opinions could be of comparable value to "insider info"
+
+##Measuring Opinions
+
+- Sentiment analysis seeks to quantify opinions based on text data
+- Many forms, e.g. statistical, knowledge based, machine learning
+- Knowledge based starts with a set of words, and each word is assigned a hand coded value
+- With the vocabulary I used,  AFINN,  each word has a score between -5 and 5
+- The sentiment associated with an opinion is the sum of the AFINN based scores of its words
+
+```{r}
+pander(head(sentiment_words))
+```
+
+##Harvesting Tweets
+
+<div align = "right"> ![](C:\Users\pgood\Desktop\Company Logos\mongo.png) </div>
+- Free Twitter API 
+- Allows user to search for tweets related to companies
+- Each tweet about a company was assumed to be an opinion regarding that company and its sentiment score was measured
+- Tweets were stored using another tool having a free version, Mongo Atlas
+- Data was harvested daily
+
+##Companies Chosen
+
+![](C:\Users\pgood\Desktop\Company Logos\microsoft.png)
+![](C:\Users\pgood\Desktop\Company Logos\citrix.png)
+![](C:\Users\pgood\Desktop\Company Logos\ge.jpg)
+<center>![](C:\Users\pgood\Desktop\Company Logos\netflix.png)</center
+![](C:\Users\pgood\Desktop\Company Logos\pfizer.png)
+<div align = "right">
+![](C:\Users\pgood\Desktop\Company Logos\starbucks.jpg)
+![](C:\Users\pgood\Desktop\Company Logos\tesla.jpg) </div>
+
+##Top Words
+
+```{r fig.width=10, fig.height= 8}
+rbind(top_words, bottom_words) %>%
+  ggplot() + geom_bar(aes(x = word2, y = total_score, fill = type), stat = "identity") +
+  coord_flip() + labs(title = "Top Sentiment From Tweets", x = "Word", y = "Total Score")
+```
+
+##Sentiment Evaluation
+
+<b>Testing with hand coded Set:</b>
+
+Number positive:  `r mean(sentiment_test$Sentiment)` <br>
+Accuracy: <font color = "green"> `r mean(sentiment_test$correct)` </font>
+
+
+```{r fig.width=10, fig.height= 8}
+
+tweets_sentiment %>% 
+    mutate (company = str_extract(company, "[[:alpha:] ]+")) %>%
+    ggplot() + geom_line(aes(x = date, y = sentiment, color = company)) + facet_wrap(~company)
+```
+
+##Stock Price Vs Sentiment
+
+- Sentiment varied wildly between companies
+- Stock price changes were on different scale than sentiment
+- Both variables standardized
+
+```{r fig.width=10, fig.height= 8}
+ggplot(daily_comp) + geom_line(aes(x = date, y = change_std, color = "Price Change")) + 
+  geom_line(aes(x = date, y = sentiment_std, color = "Sentiment")) + facet_wrap(~company) + 
+  labs(x = "Date", title = "Daily Lagged Change/Sentiment Comparison") +
+  scale_x_date(date_breaks  = "6 days")
+```
+
+##Does it Work?
+
+```{r}
+ggplot(daily_comp, aes(x = sentiment_std, y = change_std)) + geom_point() + geom_smooth(method = lm) +
+  labs(y = "Price Change Standardized", x = "Sentiment Standardized", title = "Price Change Vs Sentiment")
+
+```
+
+- Stock price and previous day's sentiment are uncorrelated
+
+##What now?
+
+- Continue to improve ability to assess the sentiment of tweets
+- More stock prices plus sentiment data points will provide more options for modeling techniques
+- Hand code some data
+- Pivoting always possible as long as the sentiment model continues to improve
+- Many companies would pay to know consumer's sentiments regarding their brands and products
