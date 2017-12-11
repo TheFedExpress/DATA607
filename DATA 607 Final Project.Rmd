@@ -15,7 +15,7 @@ knitr::opts_chunk$set(echo = TRUE, warning = F, message = F)
 
 ###Introduction
 
-As long as there has been a stock market, there have been people trying to predict the directions of prices.  "Efficient Market Hypothesis" is a theory that asserts that it is impossible to beat the market.  At the core of EMH is the assumption that all investors have the same publicly known information regarding companies, so it is impossible to get an edge on the competition.  Insider information is one way to break this parity, and that is part of why it is illegal.  I will look to Twitter to gain my own "inside information" by measuring the pulse of the Twitterverse.
+As long as there has been a stock market, there have been people trying to predict the direction of prices.  "Efficient Market Hypothesis" is a theory that asserts that it is impossible to beat the market.  At the core of EMH is the assumption that all investors have the same publicly known information regarding companies, so it is impossible to get an edge on the competition.  Insider information is one way to break this parity, and that is part of why it is illegal.  I will look to Twitter to gain my own "inside information" by measuring the pulse of the Twitterverse.
 
 ###Acquiring the data
 
@@ -449,3 +449,16 @@ This is not the boost over the previous method that I was looking for.
 ###Conclusion
 
 This exercise informed me of the steps that will need to be taken to make this a viable model.  The AFINN vocabulary will need to be tuned, possibly removing swears, as they are ambiguous.  More emoticons will also need to be added.  The offset and normalization methods for relating sentiment to price will need to be optimized.  Lastly, some of the tweets will have to be hand labeled, so that the accuracy of the sentiment scores can be tested.
+
+
+###References
+
+Text mining with R: a tidy approach by Julia Silge and David Robinson
+
+Sentiment Analysis of Twitter Data for Predicting Stock Market Movements by:
+Venkata Sasank 
+Pagolu Kamal 
+Nayan Reddy Challa 
+Ganapati Panda
+Babita Majhi
+https://arxiv.org/pdf/1610.09225.pdf
